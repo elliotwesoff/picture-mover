@@ -34,7 +34,7 @@ end
 def truthy_answer(ans)
   ans = ans.downcase
   case ans
-  when 'yes', 'y'
+  when 'yes', 'y', 'yep', 'yeah', 'ja', 'si', 'oui'
     true
   else
     false
@@ -92,9 +92,6 @@ unless truthy_answer(ans5)
   exit
 end
 
-print "\nPress enter to begin..."
-gets
-
 files = Dir["#{dir}/**/*.*"]
 filtered = files.select { |f| media_types.include? f.split('.').last.downcase }
 filtered.delete_if { |f| f.downcase.include? "thumb" } if truthy_answer(ans4)
@@ -102,6 +99,10 @@ filtered.delete_if { |f| f.downcase.include? "thumb" } if truthy_answer(ans4)
 puts "\nFound #{@total_count} matching files."
 
 dest_dir = "#{dir}/../Organized\ Pictures"
+
+
+print "\nPress enter to begin... "
+gets
 
 start_time = Time.now
 
