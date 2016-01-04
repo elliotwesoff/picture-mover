@@ -1,12 +1,12 @@
 require 'rubygems'
 require 'fileutils'
 require 'digest'
-require 'pry'
 
 def get_input
   ans = gets
   ans.downcase!
   ans.gsub! /\n/, ""
+  ans.gsub! /\\/, "/"
   ans.strip!
   return ans
 end
