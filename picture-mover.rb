@@ -1,12 +1,14 @@
 require 'rubygems'
 require 'fileutils'
 require 'digest'
+require 'pry'
 
 def get_input
   ans = gets
   ans.downcase!
   ans.gsub! /\n/, ""
-  ans.gsub! /\\/, "/"
+  # handle backslashes properly for windows and linux paths.
+  ans[0...2].match(/[A-Z]:/i) ? ans.gsub!(/\\/, "/") : ans.gsub!(/\\/, "")
   ans.strip!
   return ans
 end
