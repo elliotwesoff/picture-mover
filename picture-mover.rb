@@ -52,15 +52,15 @@ print "Hello! \n => "
 greeting = get_input
 puts "\nYou could at least say hi..." if greeting.empty?
 
-print "\nI'm going to help you organize your pictures. Is that okay? \n => "
-ans1 = get_input
+#print "\nI'm going to help you organize your pictures. Is that okay? \n => "
+#ans1 = get_input
 
-unless truthy_answer(ans1)
-  puts "K. Later!"
-  exit
-end
+#unless truthy_answer(ans1)
+  #puts "K. Later!"
+  #exit
+#end
 
-puts "\nCool. You can press Ctrl+C to exit at any time."
+#puts "\nCool. You can press Ctrl+C to exit at any time."
 
 print "\nI'm going to process all media files within this and all sub-directories.\nWould you like to specify a source directory?\nEnter the full directory name now, or just press enter to use this one. \n => "
 ans2 = get_input
@@ -122,9 +122,10 @@ puts "\nWorking!"
 @midway = @total_count / 2
 written_count = 0
 duplicate_count = 0
+thumbnail_count = 0
 
 filtered.each_with_index do |file_name, i|
-  dotty_output(i) if i % 100 == 0
+  #dotty_output(i) if i % 100 == 0
   
   File.open(file_name, 'r') do |file|
     sha = Digest::SHA256.hexdigest(file.read)
@@ -132,15 +133,31 @@ filtered.each_with_index do |file_name, i|
     unless @sha_dict.include? sha
       # if the filename already exists in the folder, give it a new name so the old
       # one isn't overwritten.
-      dest = if @file_dict.include? File.basename(file_name)
-        "#{dest_dir}/#{File.basename(file_name, ".*")}-#{Time.now.to_i}#{File.extname(file)}"
+
+      if @file_dict.include? File.basename(file_name)
+        existing_file = File.open("#{dest_dir}/#{File.basename(file_name)}")
+
+        if file.size < 100000 && truthy_answer(ans4)
+          puts "skipped thumbnail: #{file_name}"
+          thumbnail_count += 1
+          next 
+        end
+
+        next if (file.size - existing_file.size).abs < 100000 # they're the same god damn file
+
+        dest = if existing_file.size < 100000 && file.size > 100000
+          dest_dir
+        else
+          "#{dest_dir}/#{File.basename(file_name, ".*")}-#{Time.now.to_i}#{File.extname(file)}"
+        end
       else
         @file_dict << File.basename(file_name)
-        dest_dir
+        dest = dest_dir
       end
 
       @sha_dict << sha
       FileUtils.cp(file_name, dest, preserve: true)
+      puts "copied #{file_name} to #{dest}"
       written_count += 1
     else
       duplicate_count += 1
@@ -151,4 +168,5 @@ end
 end_time = Time.now
 
 puts "\nDone!"
-puts "Wrote #{written_count} files to #{dest_dir} in #{(end_time - start_time).round(3)} seconds, skipped #{duplicate_count} duplicates."
+puts "Wrote #{written_count} files to #{dest_dir} in #{(end_time - start_time).round(3)} seconds."
+puts "Skipped #{duplicate_count} duplicates, #{thumbnail_count} thumbnails."
