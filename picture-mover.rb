@@ -7,33 +7,49 @@ def get_input
   ans = gets
   ans.downcase!
   ans.gsub! /\n/, ""
+
   # handle backslashes properly for windows and linux paths.
   ans[0...2].match(/[A-Z]:/i) ? ans.gsub!(/\\/, "/") : ans.gsub!(/\\/, "")
   ans.strip!
   return ans
 end
 
-def dotty_output(i)		
-  i = i / 100
-  i <= @midway ? i.times { print '.' } : (@total_count - i).times { print '.' }		
-  puts '.'		
-end
-
 def sum_folder(dir)
-  print "Creating a dictionary of pre-existing files... "
-  files = Dir["#{dir}/*.*"]
+  files = Dir["#{dir}/**/*.*"]
+  dict_path = "#{dir}/file_dictionary-do_not_alter.txt"
 
-  files.each do |file|
-    @file_dict << File.basename(file)
-    File.open(file, 'r') { |f| @sha_dict << Digest::SHA256.hexdigest(f.read) }
+  summer = -> do
+    if files.length > 0
+      print "Creating a dictionary of pre-existing files... "
+
+      @sha_dict = files.map do |file|
+        File.open(file, 'r') { |f| Digest::SHA256.hexdigest(f.read) }
+      end
+
+      write_file_dictionary(dir)
+    end
   end
 
+  if File.exists?(dict_path)
+    shas = File.open(dict_path, "r") { |f| f.read }
+    @sha_dict = shas.split("\n")
+    summer.call if @sha_dict.length < files.length
+  else
+    summer.call
+  end
+
+  @file_dict = files.map { |f| File.basename(f).upcase }
   @file_dict.uniq!
   @sha_dict.uniq!
-  puts "done."
+end
+
+def write_file_dictionary(dir)
+  dict_path = "#{dir}/file_dictionary-do_not_alter.txt"
+  File.open(dict_path, "wb+") { |f| f.write @sha_dict.join("\n") }
 end
 
 def truthy_answer(ans)
+  return false unless ans
   ans = ans.downcase
   case ans
   when 'yes', 'y', 'yep', 'yeah', 'ja', 'si', 'oui'
@@ -52,16 +68,6 @@ print "Hello! \n => "
 greeting = get_input
 puts "\nYou could at least say hi..." if greeting.empty?
 
-#print "\nI'm going to help you organize your pictures. Is that okay? \n => "
-#ans1 = get_input
-
-#unless truthy_answer(ans1)
-  #puts "K. Later!"
-  #exit
-#end
-
-#puts "\nCool. You can press Ctrl+C to exit at any time."
-
 print "\nI'm going to process all media files within this and all sub-directories.\nWould you like to specify a source directory?\nEnter the full directory name now, or just press enter to use this one. \n => "
 ans2 = get_input
 dir = ans2.empty? ? Dir.pwd : ans2
@@ -73,6 +79,18 @@ while !Dir.exists?(dir)
 end
 
 puts "\nOkay, using #{dir}"
+
+print "\nPlease specify a destination directory, or just press enter to use one above the current directory (#{File.absolute_path("#{Dir.pwd}/..")})\n => "
+dest_dir = get_input
+if dest_dir.empty?
+  print "\nOkay, using #{dest_dir}"
+else
+  while !Dir.exists?(dest_dir)
+    print "\nThat directory doesn't exist.  Please enter a valid destination directory:\n => "
+    dest_dir = get_input
+  end
+end
+
 puts "\nHere are the file types I'll be searching for:\n\n ===> #{media_types.join(' ')}"
 print "\nWould you like to omit any of these?\nIf yes, enter them now separated by a space. Otherwise, just press enter.\n => "
 
@@ -86,7 +104,7 @@ print "\nWould you like to omit thumbnails?\n => "
 ans4 = get_input
 
 puts "\nNow then, here's whats going to happen:"
-print "I'm going to grab all media files recursively (excluding the ones you specified),\nand then put them in a folder one level up from the target directory.\nDon't worry about duplicates.  I'm smart enough to filter those out :)\nIs all of this okay?\n => "
+print "I'm going to grab all media files recursively (excluding the ones you specified),\nand put them in the folder you specified.\nDon't worry about duplicates.  I'm smart enough to filter those out :)\nIs all of this okay?\n => "
 
 ans5 = get_input
 unless truthy_answer(ans5)
@@ -94,26 +112,20 @@ unless truthy_answer(ans5)
   exit
 end
 
+# grab all files in the source directory and filter out unwanted file types.
 files = Dir["#{dir}/**/*.*"]
 filtered = files.select { |f| media_types.include? f.split('.').last.downcase }
 filtered.delete_if { |f| f.downcase.include? "thumb" } if truthy_answer(ans4)
 @total_count = filtered.count
 puts "\nFound #{@total_count} matching files."
 
-dest_dir = "#{dir}/../Organized\ Pictures"
+sum_folder(dest_dir)
 
 
 print "\nPress enter to begin... "
 gets
 
 start_time = Time.now
-
-if Dir.exists?(dest_dir)
-  sum_folder(dest_dir)
-else
-  FileUtils.mkdir(dest_dir) 
-  puts "Created destination directory."
-end
 
 sleep 1
 puts "\nWorking!"
@@ -125,16 +137,14 @@ duplicate_count = 0
 thumbnail_count = 0
 
 filtered.each_with_index do |file_name, i|
-  #dotty_output(i) if i % 100 == 0
   
   File.open(file_name, 'r') do |file|
     sha = Digest::SHA256.hexdigest(file.read)
 
     unless @sha_dict.include? sha
-      # if the filename already exists in the folder, give it a new name so the old
-      # one isn't overwritten.
 
-      if @file_dict.include? File.basename(file_name)
+      # if the filename already exists in the folder, give it a new name so the old one isn't overwritten.
+      if @file_dict.include? File.basename(file_name).upcase
         existing_file = File.open("#{dest_dir}/#{File.basename(file_name)}")
 
         if file.size < 100000 && truthy_answer(ans4)
@@ -143,13 +153,17 @@ filtered.each_with_index do |file_name, i|
           next 
         end
 
-        next if (file.size - existing_file.size).abs < 100000 # they're the same god damn file
+        diff = (file.size - existing_file.size).abs
+        next if diff == 0 || diff < 100000 # they're the same god damn file.
 
         dest = if existing_file.size < 100000 && file.size > 100000
+          # if the existing file is less than 100KB and the new one is larger,
+          # the thumbnail was copied before the actual photo. overwrite it with the same name.
           dest_dir
         else
           "#{dest_dir}/#{File.basename(file_name, ".*")}-#{Time.now.to_i}#{File.extname(file)}"
         end
+
       else
         @file_dict << File.basename(file_name)
         dest = dest_dir
@@ -157,13 +171,17 @@ filtered.each_with_index do |file_name, i|
 
       @sha_dict << sha
       FileUtils.cp(file_name, dest, preserve: true)
-      puts "copied #{file_name} to #{dest}"
+      puts "copied #{file_name}"
       written_count += 1
+
     else
       duplicate_count += 1
     end
   end
 end
+
+print "Updating file dictionary... "
+write_file_dictionary(dest_dir)
 
 end_time = Time.now
 
