@@ -133,8 +133,6 @@ start_time = Time.now
 sleep 1
 puts "\nWorking!"
 
-@total_count /= 100
-@midway = @total_count / 2
 written_count = 0
 duplicate_count = 0
 thumbnail_count = 0
