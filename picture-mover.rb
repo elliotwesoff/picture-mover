@@ -2,6 +2,7 @@ require 'rubygems'
 require 'fileutils'
 require 'digest'
 
+
 class UserInput
 
   attr_accessor :last_ans
@@ -9,7 +10,7 @@ class UserInput
   def initialize
   end
 
-  def get_input
+  def get_input(name = nil)
     ans = gets
     ans.downcase!
     ans.chomp!
@@ -17,6 +18,7 @@ class UserInput
     # handle backslashes properly for windows and linux paths.
     ans[0...2].match(/[A-Z]:/i) ? ans.gsub!(/\\/, "/") : ans.gsub!(/\\/, "")
     @last_ans = ans
+    record_answer(name, ans) if name
     return ans
   end
 
@@ -31,56 +33,81 @@ class UserInput
     end
   end
 
-end
-
-def sum_folder(dir)
-  files = Dir["#{dir}/**/*.*"]
-
-  summer = -> do
-    if files.length > 0
-      print "Creating a dictionary of pre-existing files... "
-
-      @sha_dict = files.map do |file|
-        File.open(file, 'r') { |f| Digest::SHA256.hexdigest(f.read) }
-      end
-
-      write_file_dictionary
+  private
+  
+  def record_answer(name, ans)
+    var = if name.to_s.include? "@"
+      name.to_s
+    else
+      "@#{name.to_s}"
     end
+
+    instance_variable_set(var, ans)
   end
 
-  if File.exists?(@dict_path)
-    shas = File.open(@dict_path, "r") { |f| f.read }
-    @sha_dict = shas.split("\n")
-    if @sha_dict.length < files.reject { |f| f.downcase[@dict_path] }.count
+end
+
+
+class FileDictionary
+
+  attr_accessor :sha_dictionary, :file_dictionary, :dictionary_path
+
+  MEDIA_TYPES = [:jpg, :jpeg, :png, :gif, :mov, :mp4, :aae]
+
+  def initialize
+    @sha_dictionary  = []
+    @file_dictionary = []
+  end
+
+  def sum_folder(dir)
+    files = Dir["#{dir}/**/*.*"]
+    open_file_dictionary
+
+    if @sha_dictionary.length < files.reject { |f| f.downcase[@dictionary_path] }.count
       puts "File dictionary is out of date."
-      summer.call
+      create_file_dictionary(files)
     end
-  else
-    summer.call
+
+    @file_dictionary = files.map { |f| File.basename(f).upcase }
+    @file_dictionary.uniq!
+    @sha_dictionary.uniq!
   end
 
-  @file_dict = files.map { |f| File.basename(f).upcase }
-  @file_dict.uniq!
-  @sha_dict.uniq!
+  def create_file_dictionary(files)
+    print "Creating a dictionary of pre-existing files... "
+
+    @sha_dictionary = files.map do |file|
+      File.open(file, 'r') { |f| Digest::SHA256.hexdigest(f.read) }
+    end
+
+    write_file_dictionary
+  end
+
+  def write_file_dictionary
+    File.open(@dictionary_path, "wb+") { |f| f.write @sha_dictionary.join("\n") }
+  end
+
+  def open_file_dictionary
+    if File.exists?(@dictionary_path)
+      shas = File.open(@dictionary_path, "r") { |f| f.read }
+      @sha_dictionary = shas.split("\n")
+    end
+  end
+
 end
 
-def write_file_dictionary
-  File.open(@dict_path, "wb+") { |f| f.write @sha_dict.join("\n") }
-end
 
 ########## BEGIN SCRIPT ##########
 
 ui = UserInput.new
+media_types = FileDictionary::MEDIA_TYPES
 
-@file_dict, @sha_dict = [], []
-media_types = ['jpg', 'jpeg', 'png', 'gif', 'mov', 'mp4', 'aae']
+#print "Hello! \n => "
+#greeting = ui.get_input
+#puts "\nYou could at least say hi..." if greeting.empty?
 
-print "Hello! \n => "
-greeting = ui.get_input
-puts "\nYou could at least say hi..." if greeting.empty?
-
-print "\nI'm going to process all media files within a source directory.\nPlease enter a source directory now:\n => "
-source_dir = ui.get_input
+print "\nI'm going to help get all your pictures and videos together in one place.\nPlease enter a source directory:\n => "
+source_dir = ui.get_input(:source_dir)
 
 while !Dir.exists?(source_dir)
   print "That doesn't exist. Please enter a valid directory...\n => "
@@ -110,7 +137,7 @@ print "\nWould you like to omit any of these?\nIf yes, enter them now separated 
 
 omit_types = ui.get_input
 unless omit_types.empty?
-  omit_types.split(' ').each { |f| media_types.delete f }
+  omit_types.split(' ').each { |f| media_types.delete f.to_sym }
   puts "Here's the new list of file types I'll be searching for:\n\n ===> #{media_types.join(' ')}"
 end
 
@@ -128,13 +155,13 @@ end
 
 # grab all files in the source directory and filter out unwanted file types.
 files = Dir["#{source_dir}/**/*.*"]
-filtered = files.select { |f| media_types.include? f.split('.').last.downcase }
+filtered = files.select { |f| media_types.map(&:to_s).include? f.split('.').last.downcase }
 filtered.delete_if { |f| f.downcase.include? "thumb" } if ui.truthy_answer(omit_thumbs)
-@total_count = filtered.count
-puts "\nFound #{@total_count} matching files."
+puts "\nFound #{filtered.count} matching files."
 
-@dict_path = "#{dest_dir}/file_dictionary-do_not_alter.txt"
-sum_folder(dest_dir)
+fd = FileDictionary.new
+fd.dictionary_path = "#{dest_dir}/file-dictionary-dont-touch-me.txt"
+fd.sum_folder(dest_dir)
 
 
 print "\nPress enter to begin... "
@@ -156,10 +183,10 @@ filtered.each_with_index do |file_name|
   File.open(file_name, 'r') do |file|
     sha = Digest::SHA256.hexdigest(file.read)
 
-    unless @sha_dict.include? sha
+    unless fd.sha_dictionary.include? sha
 
       # if the filename already exists in the folder, give it a new name so the old one isn't overwritten.
-      if @file_dict.include? File.basename(file_name).upcase
+      if fd.file_dictionary.include? File.basename(file_name).upcase
 
         existing_file = File.open("#{dest_dir}/#{File.basename(file_name)}")
 
@@ -186,11 +213,11 @@ filtered.each_with_index do |file_name|
         end
 
       else
-        @file_dict << File.basename(file_name)
+        fd.file_dictionary << File.basename(file_name)
         dest = dest_dir
       end
 
-      @sha_dict << sha
+      fd.sha_dictionary << sha
       FileUtils.cp(file_name, dest, preserve: true)
       puts "copied #{file_name}"
       written_count += 1
@@ -202,7 +229,7 @@ filtered.each_with_index do |file_name|
   end
 end
 
-write_file_dictionary
+fd.write_file_dictionary
 
 end_time = Time.now
 
