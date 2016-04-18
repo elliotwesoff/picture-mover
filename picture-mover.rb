@@ -2,14 +2,35 @@ require 'rubygems'
 require 'fileutils'
 require 'digest'
 
-def get_input
-  ans = gets
-  ans.downcase!
-  ans.chomp!
-  ans.strip!
-  # handle backslashes properly for windows and linux paths.
-  ans[0...2].match(/[A-Z]:/i) ? ans.gsub!(/\\/, "/") : ans.gsub!(/\\/, "")
-  return ans
+class UserInput
+
+  attr_accessor :last_ans
+
+  def initialize
+  end
+
+  def get_input
+    ans = gets
+    ans.downcase!
+    ans.chomp!
+    ans.strip!
+    # handle backslashes properly for windows and linux paths.
+    ans[0...2].match(/[A-Z]:/i) ? ans.gsub!(/\\/, "/") : ans.gsub!(/\\/, "")
+    @last_ans = ans
+    return ans
+  end
+
+  def truthy_answer(ans)
+    return false unless ans
+    ans = ans.downcase
+    case ans
+    when 'yes', 'y', 'yep', 'yeah', 'ja', 'si', 'oui'
+      true
+    else
+      false
+    end
+  end
+
 end
 
 def sum_folder(dir)
@@ -47,38 +68,30 @@ def write_file_dictionary
   File.open(@dict_path, "wb+") { |f| f.write @sha_dict.join("\n") }
 end
 
-def truthy_answer(ans)
-  return false unless ans
-  ans = ans.downcase
-  case ans
-  when 'yes', 'y', 'yep', 'yeah', 'ja', 'si', 'oui'
-    true
-  else
-    false
-  end
-end
-
 ########## BEGIN SCRIPT ##########
 
 @file_dict, @sha_dict = [], []
 media_types = ['jpg', 'jpeg', 'png', 'gif', 'mov', 'mp4', 'aae']
 
+ui = UserInput.new
+binding.pry
+
 print "Hello! \n => "
-greeting = get_input
+greeting = ui.get_input
 puts "\nYou could at least say hi..." if greeting.empty?
 
 print "\nI'm going to process all media files within a source directory.\nPlease enter a source directory now:\n => "
-source_dir = get_input
+source_dir = ui.get_input
 
 while !Dir.exists?(source_dir)
   print "That doesn't exist. Please enter a valid directory...\n => "
-  source_dir = get_input
+  source_dir = ui.get_input
 end
 
 puts "\nOkay, source directory is #{source_dir}"
 
 print "\nPlease specify a destination directory, or just press enter to use one above the source directory (#{File.absolute_path("#{source_dir}/..")})\n => "
-dest_dir = get_input
+dest_dir = ui.get_input
 
 if dest_dir.empty?
   one_up = File.absolute_path("#{source_dir}/..")
@@ -87,7 +100,7 @@ if dest_dir.empty?
 else
   while !Dir.exists?(dest_dir)
     print "\nThat directory doesn't exist.  Please enter a valid destination directory:\n => "
-    dest_dir = get_input
+    dest_dir = ui.get_input
   end
 end
 
@@ -96,20 +109,20 @@ print "\nOkay, destination directory is #{dest_dir}"
 puts "\nHere are the file types I'll be searching for:\n\n ===> #{media_types.join(' ')}"
 print "\nWould you like to omit any of these?\nIf yes, enter them now separated by a space. Otherwise, just press enter.\n => "
 
-omit_types = get_input
+omit_types = ui.get_input
 unless omit_types.empty?
   omit_types.split(' ').each { |f| media_types.delete f }
   puts "Here's the new list of file types I'll be searching for:\n\n ===> #{media_types.join(' ')}"
 end
 
 print "\nWould you like to omit thumbnails? (in this case, files under 100KB)\n => "
-omit_thumbs = get_input
+omit_thumbs = ui.get_input
 
 puts "\nNow then, here's whats going to happen:"
 print "I'm going to grab all media files within this and all sub-folders and put them in the destination directory you specified.\nDon't worry about duplicates, I'm smart enough to filter those out :)\nIs all of this okay?\n => "
 
-ans5 = get_input
-unless truthy_answer(ans5)
+ans5 = ui.get_input
+unless ui.truthy_answer(ans5)
   puts "Bye!"
   exit
 end
@@ -117,7 +130,7 @@ end
 # grab all files in the source directory and filter out unwanted file types.
 files = Dir["#{source_dir}/**/*.*"]
 filtered = files.select { |f| media_types.include? f.split('.').last.downcase }
-filtered.delete_if { |f| f.downcase.include? "thumb" } if truthy_answer(omit_thumbs)
+filtered.delete_if { |f| f.downcase.include? "thumb" } if ui.truthy_answer(omit_thumbs)
 @total_count = filtered.count
 puts "\nFound #{@total_count} matching files."
 
@@ -136,7 +149,7 @@ puts "\nWorking!"
 written_count = 0
 duplicate_count = 0
 thumbnail_count = 0
-omit_thumbs_bool = truthy_answer(omit_thumbs)
+omit_thumbs_bool = ui.truthy_answer(omit_thumbs)
 
 ########## DO THE DAMN THING! #########
 
