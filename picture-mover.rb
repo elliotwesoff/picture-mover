@@ -70,11 +70,10 @@ end
 
 ########## BEGIN SCRIPT ##########
 
+ui = UserInput.new
+
 @file_dict, @sha_dict = [], []
 media_types = ['jpg', 'jpeg', 'png', 'gif', 'mov', 'mp4', 'aae']
-
-ui = UserInput.new
-binding.pry
 
 print "Hello! \n => "
 greeting = ui.get_input
