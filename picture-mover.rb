@@ -89,69 +89,89 @@ class FileDictionary
 
   def open_file_dictionary
     if File.exists?(@dictionary_path)
-      shas = File.open(@dictionary_path, "r") { |f| f.read }
-      @sha_dictionary = shas.split("\n")
+      @sha_dictionary = File.open(@dictionary_path, "r") { |f| f.read }.split("\n")
     end
   end
 
 end
 
+class Questionnaire
+  def initialize
+  end
+
+  def ask_questionnaire
+    ask_source_dir
+    ask_dest_dir
+    ask_file_types
+    ask_omit_thumbs
+    confirmation
+  end
+
+  def ask_source_dir
+    print "\nI'm going to help get all your pictures and videos together in one place.\nPlease enter a source directory:\n => "
+    source_dir = ui.get_input(:source_dir)
+
+    while !Dir.exists?(source_dir)
+      print "That doesn't exist. Please enter a valid directory...\n => "
+      source_dir = ui.get_input
+    end
+
+    puts "\nOkay, source directory is #{source_dir}"
+  end
+
+  def ask_dest_dir
+    print "\nPlease specify a destination directory, or just press enter to use one above the source directory (#{File.absolute_path("#{source_dir}/..")})\n => "
+    dest_dir = ui.get_input
+
+    if dest_dir.empty?
+      one_up = File.absolute_path("#{source_dir}/..")
+      dest_dir = "#{one_up}/Organized Media"
+      FileUtils.mkdir_p(dest_dir)
+    else
+      while !Dir.exists?(dest_dir)
+        print "\nThat directory doesn't exist.  Please enter a valid destination directory:\n => "
+        dest_dir = ui.get_input
+      end
+    end
+
+    print "\nOkay, destination directory is #{dest_dir}"
+  end
+
+  def ask_file_types
+    puts "\nHere are the file types I'll be searching for:\n\n ===> #{media_types.join(' ')}"
+    print "\nWould you like to omit any of these?\nIf yes, enter them now separated by a space. Otherwise, just press enter.\n => "
+
+    omit_types = ui.get_input
+    unless omit_types.empty?
+      omit_types.split(' ').each { |f| media_types.delete f.to_sym }
+      puts "Here's the new list of file types I'll be searching for:\n\n ===> #{media_types.join(' ')}"
+    end
+  end
+
+  def ask_omit_thumbs
+    print "\nWould you like to omit thumbnails? (in this case, files under 100KB)\n => "
+    omit_thumbs = ui.get_input
+  end
+
+  def confirmation
+    puts "\nNow then, here's whats going to happen:"
+    print "I'm going to grab all media files within this and all sub-folders and put them in the destination directory you specified.\nDon't worry about duplicates, I'm smart enough to filter those out :)\nIs all of this okay?\n => "
+
+    ans5 = ui.get_input
+    unless ui.truthy_answer(ans5)
+      puts "Bye!"
+      exit
+    end
+  end
+end
 
 ########## BEGIN SCRIPT ##########
 
 ui = UserInput.new
 media_types = FileDictionary::MEDIA_TYPES
+q = Questionnaire.new
 
-#print "Hello! \n => "
-#greeting = ui.get_input
-#puts "\nYou could at least say hi..." if greeting.empty?
-
-print "\nI'm going to help get all your pictures and videos together in one place.\nPlease enter a source directory:\n => "
-source_dir = ui.get_input(:source_dir)
-
-while !Dir.exists?(source_dir)
-  print "That doesn't exist. Please enter a valid directory...\n => "
-  source_dir = ui.get_input
-end
-
-puts "\nOkay, source directory is #{source_dir}"
-
-print "\nPlease specify a destination directory, or just press enter to use one above the source directory (#{File.absolute_path("#{source_dir}/..")})\n => "
-dest_dir = ui.get_input
-
-if dest_dir.empty?
-  one_up = File.absolute_path("#{source_dir}/..")
-  dest_dir = "#{one_up}/Organized Media"
-  FileUtils.mkdir_p(dest_dir)
-else
-  while !Dir.exists?(dest_dir)
-    print "\nThat directory doesn't exist.  Please enter a valid destination directory:\n => "
-    dest_dir = ui.get_input
-  end
-end
-
-print "\nOkay, destination directory is #{dest_dir}"
-
-puts "\nHere are the file types I'll be searching for:\n\n ===> #{media_types.join(' ')}"
-print "\nWould you like to omit any of these?\nIf yes, enter them now separated by a space. Otherwise, just press enter.\n => "
-
-omit_types = ui.get_input
-unless omit_types.empty?
-  omit_types.split(' ').each { |f| media_types.delete f.to_sym }
-  puts "Here's the new list of file types I'll be searching for:\n\n ===> #{media_types.join(' ')}"
-end
-
-print "\nWould you like to omit thumbnails? (in this case, files under 100KB)\n => "
-omit_thumbs = ui.get_input
-
-puts "\nNow then, here's whats going to happen:"
-print "I'm going to grab all media files within this and all sub-folders and put them in the destination directory you specified.\nDon't worry about duplicates, I'm smart enough to filter those out :)\nIs all of this okay?\n => "
-
-ans5 = ui.get_input
-unless ui.truthy_answer(ans5)
-  puts "Bye!"
-  exit
-end
+q.ask_questionnaire
 
 # grab all files in the source directory and filter out unwanted file types.
 files = Dir["#{source_dir}/**/*.*"]
