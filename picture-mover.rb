@@ -1,6 +1,7 @@
 require 'rubygems'
 require 'fileutils'
 require 'digest'
+require 'pry'
 
 
 class UserInput
@@ -71,6 +72,7 @@ class FileDictionary
     @file_dictionary = files.map { |f| File.basename(f).upcase }
     @file_dictionary.uniq!
     @sha_dictionary.uniq!
+    return @sha_dictionary
   end
 
   def create_file_dictionary(files)
@@ -96,7 +98,11 @@ class FileDictionary
 end
 
 class Questionnaire
-  def initialize
+
+  attr_reader :source_dir, :dest_dir, :file_types, :omit_thumbs
+
+  def initialize(ui)
+    @ui = ui
   end
 
   def ask_questionnaire
@@ -108,97 +114,99 @@ class Questionnaire
   end
 
   def ask_source_dir
-    print "\nI'm going to help get all your pictures and videos together in one place.\nPlease enter a source directory:\n => "
-    source_dir = ui.get_input(:source_dir)
+    print "\nI'm going to help get all your pictures and videos together in one place.\nPlease specify a source directory:\n => "
+    @source_dir = @ui.get_input(:source_dir)
 
-    while !Dir.exists?(source_dir)
+    while !Dir.exists?(@source_dir)
       print "That doesn't exist. Please enter a valid directory...\n => "
-      source_dir = ui.get_input
+      @source_dir = @ui.get_input
     end
 
-    puts "\nOkay, source directory is #{source_dir}"
+    puts "\nOkay, source directory is #{@source_dir}"
   end
 
   def ask_dest_dir
-    print "\nPlease specify a destination directory, or just press enter to use one above the source directory (#{File.absolute_path("#{source_dir}/..")})\n => "
-    dest_dir = ui.get_input
+    print "\nPlease specify a destination directory:\n => "
+    @dest_dir = @ui.get_input('dest_dir')
 
-    if dest_dir.empty?
-      one_up = File.absolute_path("#{source_dir}/..")
-      dest_dir = "#{one_up}/Organized Media"
-      FileUtils.mkdir_p(dest_dir)
-    else
-      while !Dir.exists?(dest_dir)
-        print "\nThat directory doesn't exist.  Please enter a valid destination directory:\n => "
-        dest_dir = ui.get_input
-      end
+    while !Dir.exists?(@dest_dir)
+      print "\nThat directory doesn't exist.  Please enter a valid destination directory:\n => "
+      @dest_dir = @ui.get_input
     end
 
-    print "\nOkay, destination directory is #{dest_dir}"
+    #if @dest_dir.empty?
+      #parent_dir = File.absolute_path("#{@source_dir}/..")
+      #@dest_dir = "#{parent_dir}/Organized Media"
+      #FileUtils.mkdir_p(@dest_dir)
+    #else
+      #while !Dir.exists?(@dest_dir)
+        #print "\nThat directory doesn't exist.  Please enter a valid destination directory:\n => "
+        #@dest_dir = @ui.get_input
+      #end
+    #end
+
+    print "\nOkay, destination directory is #{@dest_dir}"
   end
 
   def ask_file_types
-    puts "\nHere are the file types I'll be searching for:\n\n ===> #{media_types.join(' ')}"
+    puts "\nHere are the file types I'll be searching for:\n\n ===> #{FileDictionary::MEDIA_TYPES.join(' ')}"
     print "\nWould you like to omit any of these?\nIf yes, enter them now separated by a space. Otherwise, just press enter.\n => "
 
-    omit_types = ui.get_input
-    unless omit_types.empty?
-      omit_types.split(' ').each { |f| media_types.delete f.to_sym }
-      puts "Here's the new list of file types I'll be searching for:\n\n ===> #{media_types.join(' ')}"
+    omit_types = @ui.get_input
+    if omit_types.strip.empty?
+      @file_types = FileDictionary::MEDIA_TYPES
+    else
+      @file_types = FileDictionary::MEDIA_TYPES.reject { |t| omit_types.split(' ').include? t.to_s }
+      puts "Here's the new list of file types I'll be searching for:\n\n ===> #{@file_types}"
     end
   end
 
   def ask_omit_thumbs
     print "\nWould you like to omit thumbnails? (in this case, files under 100KB)\n => "
-    omit_thumbs = ui.get_input
+    @omit_thumbs = @ui.get_input
   end
 
   def confirmation
     puts "\nNow then, here's whats going to happen:"
     print "I'm going to grab all media files within this and all sub-folders and put them in the destination directory you specified.\nDon't worry about duplicates, I'm smart enough to filter those out :)\nIs all of this okay?\n => "
 
-    ans5 = ui.get_input
-    unless ui.truthy_answer(ans5)
+    ans5 = @ui.get_input
+    unless @ui.truthy_answer(ans5)
       puts "Bye!"
-      exit
+      exit 0
     end
   end
 end
 
-########## BEGIN SCRIPT ##########
+########## COLLECT OPERATION  PARAMETERS ##########
 
 ui = UserInput.new
-media_types = FileDictionary::MEDIA_TYPES
-q = Questionnaire.new
+q = Questionnaire.new(ui)
 
 q.ask_questionnaire
 
 # grab all files in the source directory and filter out unwanted file types.
-files = Dir["#{source_dir}/**/*.*"]
-filtered = files.select { |f| media_types.map(&:to_s).include? f.split('.').last.downcase }
-filtered.delete_if { |f| f.downcase.include? "thumb" } if ui.truthy_answer(omit_thumbs)
+omit_thumbs_bool = ui.truthy_answer(q.omit_thumbs)
+files = Dir["#{q.source_dir}/**/*.*"]
+filtered = files.select { |f| q.file_types.map(&:to_s).include? f.split('.').last.downcase }
+filtered.delete_if { |f| f.downcase.include? "thumb" } if omit_thumbs_bool
 puts "\nFound #{filtered.count} matching files."
 
 fd = FileDictionary.new
-fd.dictionary_path = "#{dest_dir}/file-dictionary-dont-touch-me.txt"
-fd.sum_folder(dest_dir)
-
+fd.dictionary_path = "#{q.dest_dir}/file-dictionary-dont-touch-me.txt"
+fd.sum_folder(q.dest_dir)
 
 print "\nPress enter to begin... "
 gets
 
-start_time = Time.now
-
-sleep 1
-puts "\nWorking!"
+########## BEGIN #########
 
 written_count = 0
 duplicate_count = 0
 thumbnail_count = 0
-omit_thumbs_bool = ui.truthy_answer(omit_thumbs)
+start_time = Time.now
 
-########## DO THE DAMN THING! #########
-
+# TODO: add concurrency.
 filtered.each_with_index do |file_name|
   File.open(file_name, 'r') do |file|
     sha = Digest::SHA256.hexdigest(file.read)
@@ -208,7 +216,7 @@ filtered.each_with_index do |file_name|
       # if the filename already exists in the folder, give it a new name so the old one isn't overwritten.
       if fd.file_dictionary.include? File.basename(file_name).upcase
 
-        existing_file = File.open("#{dest_dir}/#{File.basename(file_name)}")
+        existing_file = File.open("#{q.dest_dir}/#{File.basename(file_name)}")
 
         if file.size < 100000 && omit_thumbs_bool
           puts "skipped thumbnail: #{file_name}"
@@ -226,15 +234,15 @@ filtered.each_with_index do |file_name|
         dest = if existing_file.size < 100000 && file.size > 100000
           # if the existing file is less than 100KB and the new one is larger,
           # the thumbnail was copied before the actual photo. overwrite it with the same name.
-          dest_dir
+          q.dest_dir
         else
           # otherwise, give it a new, unique name.  like the little butterly that it is.
-          "#{dest_dir}/#{File.basename(file_name, ".*")}-#{Time.now.to_i}#{File.extname(file)}"
+          "#{q.dest_dir}/#{File.basename(file_name, ".*")}-#{Time.now.to_i}#{File.extname(file)}"
         end
 
       else
         fd.file_dictionary << File.basename(file_name)
-        dest = dest_dir
+        dest = q.dest_dir
       end
 
       fd.sha_dictionary << sha
@@ -254,5 +262,5 @@ fd.write_file_dictionary
 end_time = Time.now
 
 puts "\nDone!"
-puts "Wrote #{written_count} files to #{dest_dir} in #{(end_time - start_time).round(3)} seconds."
+puts "Wrote #{written_count} files to #{q.dest_dir} in #{(end_time - start_time).round(3)} seconds."
 puts "Skipped #{duplicate_count} duplicates, skipped #{thumbnail_count} thumbnails."
