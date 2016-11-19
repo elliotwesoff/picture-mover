@@ -134,17 +134,6 @@ class Questionnaire
       @dest_dir = @ui.get_input
     end
 
-    #if @dest_dir.empty?
-      #parent_dir = File.absolute_path("#{@source_dir}/..")
-      #@dest_dir = "#{parent_dir}/Organized Media"
-      #FileUtils.mkdir_p(@dest_dir)
-    #else
-      #while !Dir.exists?(@dest_dir)
-        #print "\nThat directory doesn't exist.  Please enter a valid destination directory:\n => "
-        #@dest_dir = @ui.get_input
-      #end
-    #end
-
     print "\nOkay, destination directory is #{@dest_dir}"
   end
 
@@ -226,32 +215,38 @@ filtered.each_with_index do |file_name|
 
         diff = (file.size - existing_file.size).abs
 
-        if diff == 0 || diff < 100000 # they're the same god damn file.
+        # if the sha isn't in the dictionary, and the file name is already taken in the destination,
+        # and the size differences between the original and the new file are 0B or 100K, then it's
+        # safe to assume the two files are the same, skip it.
+        if diff == 0 || diff < 100000
           puts "skipped duplicate: #{file_name}"
+          duplicate_count += 1
           next
         end
 
         dest = if existing_file.size < 100000 && file.size > 100000
           # if the existing file is less than 100KB and the new one is larger,
           # the thumbnail was copied before the actual photo. overwrite it with the same name.
-          q.dest_dir
+          existing_file
         else
           # otherwise, give it a new, unique name.  like the little butterly that it is.
-          puts "generating new file name for conflicting file: #{existing_file}"
-          file_name = "#{q.dest_dir}/#{File.basename(file_name, ".*")}-#{Time.now.to_i}#{File.extname(file)}"
-          sleep 1
-          puts file_name
-          file_name
+          puts "generating new file name for conflicting file: #{existing_file.path}"
+          #unique_name = "#{q.dest_dir}/#{File.basename(file_name, ".*")}-#{Time.now.to_i}#{File.extname(file)}"
+          unique_name = "#{q.dest_dir}/#{File.basename(file_name, ".*")}-#{sha}#{File.extname(file)}"
+          #sleep 1
+          puts unique_name
+          unique_name
         end
 
       else
-        fd.file_dictionary << File.basename(file_name)
-        dest = q.dest_dir
+        basename = File.basename(file_name)
+        fd.file_dictionary << basename
+        dest = "#{q.dest_dir}/#{basename}"
       end
 
       fd.sha_dictionary << sha
       FileUtils.cp(file_name, dest, preserve: true)
-      puts "copied #{file_name}"
+      puts "copied #{file_name} -> #{dest}"
       written_count += 1
 
     else
