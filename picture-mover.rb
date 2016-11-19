@@ -237,7 +237,11 @@ filtered.each_with_index do |file_name|
           q.dest_dir
         else
           # otherwise, give it a new, unique name.  like the little butterly that it is.
-          "#{q.dest_dir}/#{File.basename(file_name, ".*")}-#{Time.now.to_i}#{File.extname(file)}"
+          puts "generating new file name for conflicting file: #{existing_file}"
+          file_name = "#{q.dest_dir}/#{File.basename(file_name, ".*")}-#{Time.now.to_i}#{File.extname(file)}"
+          sleep 1
+          puts file_name
+          file_name
         end
 
       else
