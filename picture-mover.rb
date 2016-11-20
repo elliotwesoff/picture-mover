@@ -1,7 +1,6 @@
 require 'rubygems'
 require 'fileutils'
 require 'digest'
-require 'pry'
 
 
 class UserInput
