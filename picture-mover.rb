@@ -199,6 +199,8 @@ filtered.each_with_index do |file_name|
   File.open(file_name, 'r') do |file|
     sha = Digest::SHA256.hexdigest(file.read)
 
+    # if the sha is not in the dictionary, merge it into the destination folder.
+    # if it is, consider it a duplicate and skip it.
     unless fd.sha_dictionary.include? sha
 
       # if the filename already exists in the folder, give it a new name so the old one isn't overwritten.
@@ -206,33 +208,31 @@ filtered.each_with_index do |file_name|
 
         existing_file = File.open("#{q.dest_dir}/#{File.basename(file_name)}")
 
+        # if file is less than 100K, and the user chose to skip thumbs, consider it a thumb and skip it.
         if file.size < 100000 && omit_thumbs_bool
           puts "skipped thumbnail: #{file_name}"
           thumbnail_count += 1
           next 
         end
 
-        diff = (file.size - existing_file.size).abs
-
         # if the sha isn't in the dictionary, and the file name is already taken in the destination,
         # and the size differences between the original and the new file are 0B or 100K, then it's
         # safe to assume the two files are the same, skip it.
+        diff = (file.size - existing_file.size).abs
         if diff == 0 || diff < 100000
           puts "skipped duplicate: #{file_name}"
           duplicate_count += 1
           next
         end
 
+        # if the existing file is less than 100KB and the new one is larger,
+        # the thumbnail was copied before the actual photo. overwrite it with the same name.
+        # otherwise, give it a new, unique name.  like the little butterly that it is.
         dest = if existing_file.size < 100000 && file.size > 100000
-          # if the existing file is less than 100KB and the new one is larger,
-          # the thumbnail was copied before the actual photo. overwrite it with the same name.
           existing_file
         else
-          # otherwise, give it a new, unique name.  like the little butterly that it is.
           puts "generating new file name for conflicting file: #{existing_file.path}"
-          #unique_name = "#{q.dest_dir}/#{File.basename(file_name, ".*")}-#{Time.now.to_i}#{File.extname(file)}"
           unique_name = "#{q.dest_dir}/#{File.basename(file_name, ".*")}-#{sha}#{File.extname(file)}"
-          #sleep 1
           puts unique_name
           unique_name
         end
@@ -248,7 +248,7 @@ filtered.each_with_index do |file_name|
       puts "copied #{file_name} -> #{dest}"
       written_count += 1
 
-    else
+    else # matches the unless.
       puts "skipped duplicate: #{file_name}"
       duplicate_count += 1
     end
