@@ -1,188 +1,19 @@
 require 'rubygems'
 require 'fileutils'
-require 'digest'
+require 'pry'
 
-
-class UserInput
-
-  attr_accessor :last_ans
-
-  def initialize
-  end
-
-  def get_input(name = nil)
-    ans = gets
-    ans.downcase!
-    ans.chomp!
-    ans.strip!
-    # handle backslashes properly for windows and linux paths.
-    ans[0...2].match(/[A-Z]:/i) ? ans.gsub!(/\\/, "/") : ans.gsub!(/\\/, "")
-    @last_ans = ans
-    record_answer(name, ans) if name
-    return ans
-  end
-
-  def truthy_answer(ans)
-    return false unless ans
-    ans = ans.downcase
-    case ans
-    when 'yes', 'y', 'yep', 'yeah', 'ja', 'si', 'oui'
-      true
-    else
-      false
-    end
-  end
-
-  private
-  
-  def record_answer(name, ans)
-    var = if name.to_s.include? "@"
-      name.to_s
-    else
-      "@#{name.to_s}"
-    end
-
-    instance_variable_set(var, ans)
-  end
-
-end
-
-
-class FileDictionary
-
-  attr_accessor :sha_dictionary, :file_dictionary, :dictionary_path
-
-  MEDIA_TYPES = [:jpg, :jpeg, :png, :gif, :mov, :mp4, :aae]
-
-  def initialize
-    @sha_dictionary  = []
-    @file_dictionary = []
-  end
-
-  def sum_folder(dir)
-    files = Dir["#{dir}/**/*.*"]
-    open_file_dictionary
-
-    if @sha_dictionary.length < files.reject { |f| f.downcase[@dictionary_path] }.count
-      puts "File dictionary is out of date."
-      create_file_dictionary(files)
-    end
-
-    @file_dictionary = files.map { |f| File.basename(f).upcase }
-    @file_dictionary.uniq!
-    @sha_dictionary.uniq!
-    return @sha_dictionary
-  end
-
-  def create_file_dictionary(files)
-    print "Creating a dictionary of pre-existing files... "
-
-    @sha_dictionary = files.map do |file|
-      File.open(file, 'r') { |f| Digest::SHA256.hexdigest(f.read) }
-    end
-
-    write_file_dictionary
-  end
-
-  def write_file_dictionary
-    File.open(@dictionary_path, "wb+") { |f| f.write @sha_dictionary.join("\n") }
-  end
-
-  def open_file_dictionary
-    if File.exists?(@dictionary_path)
-      @sha_dictionary = File.open(@dictionary_path, "r") { |f| f.read }.split("\n")
-    end
-  end
-
-end
-
-class Questionnaire
-
-  attr_reader :source_dir, :dest_dir, :file_types, :omit_thumbs
-
-  def initialize(ui)
-    @ui = ui
-  end
-
-  def ask_questionnaire
-    ask_source_dir
-    ask_dest_dir
-    ask_file_types
-    ask_omit_thumbs
-    confirmation
-  end
-
-  def ask_source_dir
-    print "\nI'm going to help get all your pictures and videos together in one place.\nPlease specify a source directory:\n => "
-    @source_dir = @ui.get_input(:source_dir)
-
-    while !Dir.exists?(@source_dir)
-      print "That doesn't exist. Please enter a valid directory...\n => "
-      @source_dir = @ui.get_input
-    end
-
-    puts "\nOkay, source directory is #{@source_dir}"
-  end
-
-  def ask_dest_dir
-    print "\nPlease specify a destination directory:\n => "
-    @dest_dir = @ui.get_input('dest_dir')
-
-    while !Dir.exists?(@dest_dir)
-      print "\nThat directory doesn't exist.  Please enter a valid destination directory:\n => "
-      @dest_dir = @ui.get_input
-    end
-
-    print "\nOkay, destination directory is #{@dest_dir}"
-  end
-
-  def ask_file_types
-    puts "\nHere are the file types I'll be searching for:\n\n ===> #{FileDictionary::MEDIA_TYPES.join(' ')}"
-    print "\nWould you like to omit any of these?\nIf yes, enter them now separated by a space. Otherwise, just press enter.\n => "
-
-    omit_types = @ui.get_input
-    if omit_types.strip.empty?
-      @file_types = FileDictionary::MEDIA_TYPES
-    else
-      @file_types = FileDictionary::MEDIA_TYPES.reject { |t| omit_types.split(' ').include? t.to_s }
-      puts "Here's the new list of file types I'll be searching for:\n\n ===> #{@file_types}"
-    end
-  end
-
-  def ask_omit_thumbs
-    print "\nWould you like to omit thumbnails? (in this case, files under 100KB)\n => "
-    @omit_thumbs = @ui.get_input
-  end
-
-  def confirmation
-    puts "\nNow then, here's whats going to happen:"
-    print "I'm going to grab all media files within this and all sub-folders and put them in the destination directory you specified.\nDon't worry about duplicates, I'm smart enough to filter those out :)\nIs all of this okay?\n => "
-
-    ans5 = @ui.get_input
-    unless @ui.truthy_answer(ans5)
-      puts "Bye!"
-      exit 0
-    end
-  end
-end
-
-########## COLLECT OPERATION  PARAMETERS ##########
+require './questionnaire'
+require './user_input'
+require './media_folder'
+require './media_item'
+require './image_db'
 
 ui = UserInput.new
 q = Questionnaire.new(ui)
-
 q.ask_questionnaire
-
-# grab all files in the source directory and filter out unwanted file types.
-omit_thumbs_bool = ui.truthy_answer(q.omit_thumbs)
-files = Dir["#{q.source_dir}/**/*.*"]
-filtered = files.select { |f| q.file_types.map(&:to_s).include? f.split('.').last.downcase }
-filtered.delete_if { |f| f.downcase.include? "thumb" } if omit_thumbs_bool
-puts "\nFound #{filtered.count} matching files."
-
-fd = FileDictionary.new
-fd.dictionary_path = "#{q.dest_dir}/file-dictionary-dont-touch-me.txt"
-fd.sum_folder(q.dest_dir)
+ImageDB.new(q.dest_dir.to_s) # initialize database.
+media_folder = MediaFolder.new
+media_folder.load_media(q.dest_dir.to_s)
 
 print "\nPress enter to begin... "
 gets
