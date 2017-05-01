@@ -1,4 +1,4 @@
-class UserInput
+module UserInput
 
   attr_accessor :last_ans
 

@@ -3,17 +3,16 @@ require 'fileutils'
 require 'pry'
 
 require './questionnaire'
-require './user_input'
 require './media_folder'
 require './media_item'
 require './image_db'
 
-ui = UserInput.new
-q = Questionnaire.new(ui)
+q = Questionnaire.new
 q.ask_questionnaire
 ImageDB.new(q.dest_dir.to_s) # initialize database.
 media_folder = MediaFolder.new
-media_folder.load_media(q.dest_dir.to_s)
+filtered = media_folder.load_media(q.source_dir)
+
 
 print "\nPress enter to begin... "
 gets
@@ -25,17 +24,16 @@ duplicate_count = 0
 thumbnail_count = 0
 start_time = Time.now
 
-# TODO: add concurrency.
-filtered.each_with_index do |file_name|
+filtered.each do |file_name|
   File.open(file_name, 'r') do |file|
     sha = Digest::SHA256.hexdigest(file.read)
 
     # if the sha is not in the dictionary, merge it into the destination folder.
     # if it is, consider it a duplicate and skip it.
-    unless fd.sha_dictionary.include? sha
+    unless media_folder.sha_dictionary.include? sha
 
       # if the filename already exists in the folder, give it a new name so the old one isn't overwritten.
-      if fd.file_dictionary.include? File.basename(file_name).upcase
+      if media_folder.file_dictionary.include? File.basename(file_name).upcase
 
         existing_file = File.open("#{q.dest_dir}/#{File.basename(file_name)}")
 
@@ -70,12 +68,11 @@ filtered.each_with_index do |file_name|
 
       else
         basename = File.basename(file_name)
-        fd.file_dictionary << basename
         dest = "#{q.dest_dir}/#{basename}"
       end
 
-      fd.sha_dictionary << sha
       FileUtils.cp(file_name, dest, preserve: true)
+      MediaItem.persist_item("#{dest}/#{file_name}", sha)
       puts "copied #{file_name} -> #{dest}"
       written_count += 1
 
@@ -86,10 +83,9 @@ filtered.each_with_index do |file_name|
   end
 end
 
-fd.write_file_dictionary
-
 end_time = Time.now
 
 puts "\nDone!"
-puts "Wrote #{written_count} files to #{q.dest_dir} in #{(end_time - start_time).round(3)} seconds."
+puts "Processed #{filtered.count} files in #{(end_time - start_time).round(3)} seconds."
+puts "Wrote #{written_count} new files."
 puts "Skipped #{duplicate_count} duplicates, skipped #{thumbnail_count} thumbnails."
