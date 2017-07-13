@@ -36,7 +36,6 @@ module UserInput
     else
       "@#{name.to_s}"
     end
-
     instance_variable_set(var, ans)
   end
 
