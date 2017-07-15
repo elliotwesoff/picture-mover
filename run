@@ -1,1 +1,0 @@
-ruby ./picture-mover.rb -g -s ./test/source -d ./test/destination

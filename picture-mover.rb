@@ -13,12 +13,17 @@ ARGS = ARGV
 
 class PictureMover
 
-  attr_accessor :options, :written, :duplicate, :thumbnail
+  attr_accessor :options, :written, :duplicate, :skipped, :copy_options
 
   include OptionsParser
   
   def initialize
     @options = parse_options
+    @copy_options = { 
+      preserve: options.preserve_files,
+      noop: options.test_run,
+      verbose: options.verbose
+    }
   end
 
   def display_stats
@@ -33,56 +38,39 @@ class PictureMover
     image_db = ImageDB.new(options.destination)
     media_folder = MediaFolder.new
     media = media_folder.load_media(options.source)
-    written, duplicate, thumbnail = 0, 0, 0
+    written, duplicate, skipped = 0, 0, 0
     binding.pry if options.debug
     display_stats
     get_approval
     start = Time.now
     media.each do |file_name|
       file = File.open(file_name, 'r')
-      sha = Digest::SHA256.hexdigest(file.read)
+      raw = file.read
 
-      # if the sha is not in the dictionary, merge it into the destination folder.
-      # if it is, consider it a duplicate and skip it.
+      if file.size < options.minimum_size
+        puts "file doesn't meet size threshold of #(options.minimum_size}B: #{file_name}" if options.verbose
+        skipped += 1
+        next 
+      end
+
+      sha256 = Digest::SHA256.hexdigest(raw)
+
       # http://stackoverflow.com/questions/9333952/case-insensitive-arrayinclude
-      unless media_folder.sha_dictionary.any? { |s| s.casecmp(sha) == 0 }
-
-        # if the filename already exists in the folder, give it a new name so the old one isn't overwritten.
-        if media_folder.file_dictionary.any? { |f| f.casecmp(File.basename(file_name)) == 0 }
-
-          existing_file = File.open("#{options.destination}/#{File.basename(file_name)}")
-
-          if file.size < options.minimum_size
-            puts "file doesn't meet size threshold of #(options.minimum_size}B: #{file_name}" if options.verbose
-            thumbnail += 1
-            next 
-          end
-
-          # if the existing file is less than 100KB and the new one is larger,
-          # the thumbnail was copied before the actual photo. overwrite it with the same name.
-          # otherwise, give it a new, unique name.  like the little butterly that it is.
-          dest = if existing_file.size < 100000 && file.size > 100000
-            existing_file
-          else
-            puts "generating new file name for conflicting file: #{existing_file.path}" if options.verbose
-            unique_name = "#{options.destination}/#{File.basename(file_name, ".*")}-#{sha}#{File.extname(file)}"
-            puts unique_name
-            unique_name
-          end
-
-        else
-          basename = File.basename(file_name)
-          dest = "#{options.destination}/#{basename}"
-        end
-
-        FileUtils.cp(file_name, dest, preserve: true, noop: options.test_run)
-        MediaItem.persist_item("#{dest}/#{file_name}", sha)
-        puts "copied #{file_name} -> #{dest}"
-        written += 1
-
-      else # matches the unless.
+      if media_folder.sha256_dictionary.any? { |s| s.casecmp(sha256) == 0 }
         puts "skipped duplicate: #{file_name}"
         duplicate += 1
+        skipped += 1
+      else
+        new_file_path = "#{options.destination}/#{File.basename(file_name)}"
+        binding.pry if options.debug
+        if media_folder.file_dictionary.any? { |f| f.casecmp(File.basename(file_name)) == 0 }
+          new_file_path = "#{options.destination}/#{File.basename(file_name, ".*")}-#{Digest::SHA1.hexdigest(raw)}#{File.extname(file)}"
+          puts "generated new file name for conflicting file: #{existing_file.path}\n#{new_file_path}" if options.verbose
+        end
+        FileUtils.cp(file_name, new_file_path, copy_options)
+        MediaItem.persist_item("#{options.destination}/#{file_name}", sha256)
+        puts "copied #{file_name} -> #{new_file_path}"
+        written += 1
       end
     end
 
@@ -91,7 +79,7 @@ class PictureMover
     puts "\nDone!"
     puts "Processed #{media.count} files in #{(finish - start).round(3)} seconds."
     puts "Wrote #{written} new files."
-    puts "Skipped #{duplicate} duplicates, skipped #{thumbnail} thumbnails."
+    puts "Skipped #{duplicate} duplicates, #{skipped} files skipped in total."
   end
 
 end

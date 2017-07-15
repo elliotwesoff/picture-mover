@@ -12,6 +12,7 @@ module OptionsParser
     f = cli_args.match(matcher.call('f'))
     b = cli_args.match(matcher.call('b'))
     t = cli_args.match(matcher.call('t'))
+    p = cli_args.match(matcher.call('p'))
     v = cli_args.match(matcher.call('v'))
     h = cli_args.match(matcher.call('h'))
     g = cli_args.match(matcher.call('g'))
@@ -20,6 +21,7 @@ module OptionsParser
       options.destination = d.captures.first
       options.omit_filetypes = f ? f.captures.first.split(";") : []
       options.minimum_size = b ? b.captures.first : 0
+      options.preserve_files = p ? true : false
       options.test_run = t ? true : false
       options.verbose = v ? true : false
       options.debug = g ? true : false
