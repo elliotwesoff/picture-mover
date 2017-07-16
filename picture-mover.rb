@@ -44,7 +44,6 @@ class PictureMover
       requested.build_library
     }
     [a, b].map(&:join) # wait for the threaded processes to finish.
-    binding.pry
   end
 
   def execute_1
