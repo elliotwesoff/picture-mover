@@ -15,16 +15,14 @@ module OptionsParser
     p = cli_args.match(matcher.call('p'))
     v = cli_args.match(matcher.call('v'))
     h = cli_args.match(matcher.call('h'))
-    g = cli_args.match(matcher.call('g'))
     if s && d && !h
-      options.source = s.captures.first
-      options.destination = d.captures.first
+      options.source = File.absolute_path(s.captures.first)
+      options.destination = File.absolute_path(d.captures.first)
       options.omit_filetypes = f ? f.captures.first.split(";") : []
       options.minimum_size = b ? b.captures.first : 0
       options.preserve_files = p ? true : false
       options.test_run = t ? true : false
       options.verbose = v ? true : false
-      options.debug = g ? true : false
     else
       puts menu_text
       exit 0

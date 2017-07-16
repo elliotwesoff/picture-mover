@@ -9,8 +9,6 @@ require './media_folder'
 require './media_item'
 require './image_db'
 
-ARGS = ARGV
-
 class PictureMover
 
   attr_accessor :options, :written, :duplicate, :skipped, :copy_options
@@ -34,14 +32,28 @@ class PictureMover
     STDIN.getc
   end
 
-  def execute
+  def execute_2
+    existing = MediaFolder.new(options.destination)
+    requested = MediaFolder.new(options.source)
+    a = Thread.new { 
+      existing.load_media
+      existing.build_library
+    }
+    b = Thread.new {
+      requested.load_media
+      requested.build_library
+    }
+    [a, b].map(&:join) # wait for the threaded processes to finish.
+    binding.pry
+  end
+
+  def execute_1
     image_db = ImageDB.new(options.destination)
     media_folder = MediaFolder.new
     media = media_folder.load_media(options.source)
     written, duplicate, skipped = 0, 0, 0
-    binding.pry if options.debug
     display_stats
-    get_approval
+    # get_approval
     start = Time.now
     media.each do |file_name|
       file = File.open(file_name, 'r')
@@ -62,7 +74,6 @@ class PictureMover
         skipped += 1
       else
         new_file_path = "#{options.destination}/#{File.basename(file_name)}"
-        binding.pry if options.debug
         if media_folder.file_dictionary.any? { |f| f.casecmp(File.basename(file_name)) == 0 }
           new_file_path = "#{options.destination}/#{File.basename(file_name, ".*")}-#{Digest::SHA1.hexdigest(raw)}#{File.extname(file)}"
           puts "generated new file name for conflicting file: #{existing_file.path}\n#{new_file_path}" if options.verbose
@@ -84,4 +95,4 @@ class PictureMover
 
 end
 
-PictureMover.new.execute
+PictureMover.new.execute_2
