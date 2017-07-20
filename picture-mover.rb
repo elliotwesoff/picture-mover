@@ -24,26 +24,9 @@ class PictureMover
     }
   end
 
-  def display_stats
-  end
-
   def get_approval
-    puts "Press enter to continue..."
+    puts "Press enter to continue ..."
     STDIN.getc
-  end
-
-  def execute_2
-    existing = MediaFolder.new(options.destination)
-    requested = MediaFolder.new(options.source)
-    a = Thread.new { 
-      existing.load_media
-      existing.build_library
-    }
-    b = Thread.new {
-      requested.load_media
-      requested.build_library
-    }
-    [a, b].map(&:join) # wait for the threaded processes to finish.
   end
 
   def execute_1
@@ -52,7 +35,6 @@ class PictureMover
     media = media_folder.load_media(options.source)
     written, duplicate, skipped = 0, 0, 0
     display_stats
-    # get_approval
     start = Time.now
     media.each do |file_name|
       file = File.open(file_name, 'r')
@@ -90,6 +72,33 @@ class PictureMover
     puts "Processed #{media.count} files in #{(finish - start).round(3)} seconds."
     puts "Wrote #{written} new files."
     puts "Skipped #{duplicate} duplicates, #{skipped} files skipped in total."
+  end
+
+  def execute_2
+    existing = MediaFolder.new(options.destination)
+    requested = MediaFolder.new(options.source)
+    a = Thread.new { 
+      existing.load_media
+      existing.build_library
+    }
+    b = Thread.new {
+      requested.load_media
+      requested.build_library
+    }
+    [a, b].map(&:join) # wait for the threaded processes to finish.
+    items = requested.library.dup
+    existing_hashes = existing.library.map { |f| f[:sha256] }
+    existing_names = existing.library.map { |f| File.basename(f[:path]) }
+    items.reject! { |x| existing_hashes.include?(x[:sha256]) }
+    items.each { |x| x[:destination] = "#{options.destination}/#{File.basename(x[:path])}" }
+    items.select { |x| existing_names.include?(File.basename(x[:path])) }.each do |file|
+      file[:destination] = "#{file[:sha256]}#{File.extname(file[:path])}"
+    end
+    puts "Copying #{items.count}/#{requested.library.count} items..."
+    get_approval
+    items.each do |file|
+      Thread.new { FileUtils.cp(file[:path], file[:destination], copy_options) }.join
+    end
   end
 
 end

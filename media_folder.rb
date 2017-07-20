@@ -12,6 +12,7 @@ class MediaFolder
     @reject_filetypes = reject_filetypes
     @directory_contents = []
     @library = []
+    FileUtils.mkdir_p(@path)
   end
 
   def file_dictionary
@@ -24,7 +25,7 @@ class MediaFolder
   
   def load_media
     files = Dir["#{path}/**/*.*"]
-    reg = Regexp.new(MEDIA_TYPES.reject { |m| reject_filetypes.include?(m) }.map { |m| "(.#{m}$)" }.join("|")) # todo: test the reject.
+    reg = Regexp.new(MEDIA_TYPES.reject { |m| reject_filetypes.include?(m) }.map { |m| "(.#{m}$)" }.join("|"), 'i') # todo: test the reject.
     @directory_contents = files.select { |f| f.match(reg) }
     puts "Found #{files.count} items. #{@directory_contents.count} remain post-filter."
     return @directory_contents
@@ -32,9 +33,7 @@ class MediaFolder
 
   def build_library
     @library = []
-    start = Time.now
-    puts "Threading is #{thread}"
-    puts "Working..."
+    puts "Calculating ..."
     # TODO: figure out why raising the slice number raises this error:
     # Too many open files @ rb_sysopen
     directory_contents.each_slice(100) do |chunk|
@@ -42,8 +41,6 @@ class MediaFolder
         Thread.new { library_entry(path) }
       end.map(&:join)
     end
-    finish = Time.now
-    puts "Library built in #{finish - start} seconds."
     return library
   end
 
