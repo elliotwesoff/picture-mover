@@ -34,7 +34,6 @@ class PictureMover
     media_folder = MediaFolder.new
     media = media_folder.load_media(options.source)
     written, duplicate, skipped = 0, 0, 0
-    display_stats
     start = Time.now
     media.each do |file_name|
       file = File.open(file_name, 'r')
