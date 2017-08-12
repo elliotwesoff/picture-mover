@@ -74,6 +74,19 @@ class PictureMover
   end
 
   def execute_2
+    # 1. build a collection of all entries in the source and the destination with data shape:
+    #    { path: string, sha256: string }
+    #
+    # 2. discard all items in the source that have sha256 hashes that exist in the destination -
+    #    those files unquestionably already exist there.
+    # 
+    # 3. build destination paths for all of the files in the source folder, and rename the files
+    #    to the hash value if the file namem already exists in the destination.
+    # 
+    # 4. make sure the user is aware of the details of the copy process, get their approval, and
+    #    begin the copy process. specific instructions on the copy should be determined by the
+    #    user based on selected options via CLI, or if not specified, by their defaults.
+
     existing = MediaFolder.new(options.destination)
     requested = MediaFolder.new(options.source)
     a = Thread.new { 
