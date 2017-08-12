@@ -15,7 +15,9 @@ module OptionsParser
     p = cli_args.match(matcher.call('p'))
     v = cli_args.match(matcher.call('v'))
     h = cli_args.match(matcher.call('h'))
-    if s && d && !h
+    m = cli_args.match(matcher.call('m'))
+    if !h && m && s && d
+      options.copy_method = m.captures.first.strip
       options.source = File.absolute_path(s.captures.first)
       options.destination = File.absolute_path(d.captures.first)
       options.omit_filetypes = f ? f.captures.first.split(";") : []
@@ -32,9 +34,12 @@ module OptionsParser
 
   def menu_text
     str = <<-MENU
-    ruby picture-mover.rb -s [source] -d [destination] [ARGS]
+    ruby picture-mover.rb -m [1/2] -s [source] -d [destination] [ARGS]
     
     Available switches:
+    -m : copy method [1/2]:
+         1. uses a SQLiteDB to manage your collection. use this if you plan on using this tool consistently.
+         2. uses threading and better logic to perform a faster copy process. better for single use.
     -s : source directory *
     -d : destination directory *
     -f : omit-filetypes, semicolon delimited

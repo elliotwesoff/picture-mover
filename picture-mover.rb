@@ -24,6 +24,10 @@ class PictureMover
     }
   end
 
+  def main
+    eval("execute_#{options.copy_method}")
+  end
+
   def get_approval
     puts "Press enter to continue ..."
     STDIN.getc
@@ -113,6 +117,31 @@ class PictureMover
     end
   end
 
+  private
+
+  def method_missing(m, *args, &block)
+    puts "\nERROR: Unknown copy process name: #{m.to_s.gsub(/[^\d]/, '')}"
+    puts
+    puts menu_text
+  end
+
+  def log(str)
+    # TODO
+    puts str
+  end
+
 end
 
-PictureMover.new.execute_2
+begin
+  pm = PictureMover.new
+  pm.main
+  exit 0
+rescue => e
+  if pm && pm.log
+    pm.log.write e.message
+    pm.log.write e.backtrace.join("\n")
+  end
+  puts "FATAL: #{e.message}"
+  puts e.backtrace.join("\n")
+  exit 1
+end
