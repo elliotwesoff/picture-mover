@@ -6,7 +6,7 @@ module OptionsParser
     options = OpenStruct.new
     ARGV.unshift(' ')
     cli_args = ARGV.join(' ')
-    matcher = -> (switch) { /(?<=\s\-#{switch})\s?(\S+)(?=\s\-)?/ }
+    matcher = -> (switch) { /(?<=\s\-#{switch})\s?(\S+)?(?=\s\-)?/ }
     s = cli_args.match(matcher.call('s'))
     d = cli_args.match(matcher.call('d'))
     f = cli_args.match(matcher.call('f'))
