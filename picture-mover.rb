@@ -96,10 +96,12 @@ class PictureMover
     a = Thread.new { 
       existing.load_media
       existing.build_library
+      existing.rename_conflicting_files
     }
     b = Thread.new {
       requested.load_media
       requested.build_library
+      requested.rename_conflicting_files
     }
     [a, b].map(&:join) # wait for the threaded processes to finish.
     items = requested.library.dup

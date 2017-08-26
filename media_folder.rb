@@ -44,6 +44,21 @@ class MediaFolder
     return library
   end
 
+  def filter_duplicates
+  end
+  
+  def rename_conflicting_files
+    conflicting_names = library.group_by { |x| File.basename(x[:path]) }.values
+    conflicting_names.select { |x| x.length > 1 }.each do |items|
+      items.each do |item|
+        dir = File.dirname(item[:path])
+        ext = File.extname(item[:path])
+        entry = library.find { |x| x[:path] == item[:path] }
+        entry[:path] = "#{dir}/#{item[:sha256]}#{ext}"
+      end
+    end
+  end
+
   private
 
   def library_entry(path)
