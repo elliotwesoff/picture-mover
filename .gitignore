@@ -2,4 +2,5 @@
 .bundle
 *.db
 d/*
-test/*
+test/source
+test/DCIM
