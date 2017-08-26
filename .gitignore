@@ -4,3 +4,6 @@
 d/*
 test/source
 test/DCIM
+test/debug
+test/destination/*
+test/test
