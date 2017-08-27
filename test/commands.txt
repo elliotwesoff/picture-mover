@@ -1,1 +1,1 @@
-./picture-mover.rb -m 2 -s ./test/source_duplicates/source -d ./test/source_duplicates/destination
+./picture_mover.rb -m 2 -s ./test/source_duplicates/source -d ./test/source_duplicates/destination
