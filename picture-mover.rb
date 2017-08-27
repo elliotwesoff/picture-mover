@@ -8,6 +8,7 @@ require './options_parser'
 require './media_folder'
 require './media_item'
 require './image_db'
+require './copy_task'
 
 class PictureMover
 
@@ -91,32 +92,37 @@ class PictureMover
     #    begin the copy process. specific instructions on the copy should be determined by the
     #    user based on selected options via CLI, or if not specified, by their defaults.
 
-    existing = MediaFolder.new(options.destination)
     requested = MediaFolder.new(options.source)
+    existing = MediaFolder.new(options.destination)
     a = Thread.new { 
       existing.load_media
       existing.build_library
+      existing.filter_duplicates
       existing.rename_conflicting_files
     }
     b = Thread.new {
       requested.load_media
       requested.build_library
+      requested.filter_duplicates
       requested.rename_conflicting_files
     }
     [a, b].map(&:join) # wait for the threaded processes to finish.
     items = requested.library.dup
-    existing_hashes = existing.library.map { |f| f[:sha256] }
-    existing_names = existing.library.map { |f| File.basename(f[:path]) }
-    items.reject! { |x| existing_hashes.include?(x[:sha256]) }
-    items.each { |x| x[:destination] = "#{options.destination}/#{File.basename(x[:path])}" }
-    items.select { |x| existing_names.include?(File.basename(x[:path])) }.each do |file|
-      file[:destination] = "#{file[:sha256]}#{File.extname(file[:path])}"
+    items.reject! { |x| existing.sha_dictionary.include?(x.sha256) }
+    copy_tasks = items.map do |x|
+      CopyTask.new({
+        media_item: x
+        destination: "#{options.destination}/#{File.basename(x.file_path)}",
+        copy_options: copy_options
+      })
     end
-    puts "Copying #{items.count}/#{requested.library.count} items..."
+    existing_names = existing.library.map { |x| File.basename(x.file_path) }
+    copy_tasks.select { |ct| existing_names.include?(ct.file_name) }.each do |ct|
+      ct.destination = "#{ct.media_item.sha256]}#{File.extname(ct.source)}"
+    end
+    puts "Copying #{copy_tasks.count}/#{requested.library.count} items..."
     get_approval
-    items.each do |file|
-      Thread.new { FileUtils.cp(file[:path], file[:destination], copy_options) }.join
-    end
+    copy_tasks.each(&:copy!)
   end
 
   private

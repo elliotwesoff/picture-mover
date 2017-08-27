@@ -1,4 +1,3 @@
-require 'digest'
 require './media_item'
 
 class MediaFolder
@@ -16,11 +15,11 @@ class MediaFolder
   end
 
   def file_dictionary
-    @file_dictionary ||= MediaItem.all.map(&:file_name)
+    @file_dictionary ||= library.map(&:file_path)
   end
   
   def sha_dictionary
-    @sha256_dictionary ||= MediaItem.all.map(&:sha256)
+    @sha256_dictionary ||= library.map(&:sha256)
   end
   
   def load_media
@@ -32,37 +31,32 @@ class MediaFolder
   end
 
   def build_library
-    @library = []
-    puts "Calculating ..."
     # TODO: figure out why raising the slice number raises this error:
     # Too many open files @ rb_sysopen
+    @library = []
     directory_contents.each_slice(100) do |chunk|
       chunk.map do |path|
-        Thread.new { library_entry(path) }
+        Thread.new { library << MediaItem.new(path) }
       end.map(&:join)
     end
-    return library
   end
 
   def filter_duplicates
+    duplicates = library.group_by(&:sha256).select { |a, b| b.count > 0 }
+    duplicates.each { |d| library.delete(d) }
   end
   
   def rename_conflicting_files
-    conflicting_names = library.group_by { |x| File.basename(x[:path]) }.values
+    # TODO: get the god damn ActiveRecord::QueryMethods module in here. god damn ridiculous.
+    conflicting_names = library.group_by { |mi| File.basename(mi.file_path) }.values
     conflicting_names.select { |x| x.length > 1 }.each do |items|
       items.each do |item|
-        dir = File.dirname(item[:path])
-        ext = File.extname(item[:path])
-        entry = library.find { |x| x[:path] == item[:path] }
-        entry[:path] = "#{dir}/#{item[:sha256]}#{ext}"
+        dir = File.dirname(item.file_path)
+        ext = File.extname(item.file_path)
+        entry = library.find { |x| x.file_path == item.file_path }
+        entry.file_path = "#{dir}/#{item.sha256}#{ext}"
       end
     end
-  end
-
-  private
-
-  def library_entry(path)
-    library << { path: path, sha256: Digest::SHA256.hexdigest(File.open(path).read) }
   end
 
 end
