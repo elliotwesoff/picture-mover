@@ -30,7 +30,7 @@ class PictureMover
   end
 
   def get_approval
-    puts "Press enter to continue ..."
+    puts "Press enter to continue."
     STDIN.getc
   end
 
@@ -92,8 +92,8 @@ class PictureMover
     #    begin the copy process. specific instructions on the copy should be determined by the
     #    user based on selected options via CLI, or if not specified, by their defaults.
 
-    requested = MediaFolder.new(options.source)
-    existing = MediaFolder.new(options.destination)
+    requested = MediaFolder.new(options.source, options)
+    existing = MediaFolder.new(options.destination, options)
     a = Thread.new { 
       existing.load_media
       existing.build_library
@@ -111,16 +111,19 @@ class PictureMover
     items.reject! { |x| existing.sha_dictionary.include?(x.sha256) }
     copy_tasks = items.map do |x|
       CopyTask.new({
-        media_item: x
+        media_item: x,
         destination: "#{options.destination}/#{File.basename(x.file_path)}",
         copy_options: copy_options
       })
     end
     existing_names = existing.library.map { |x| File.basename(x.file_path) }
-    copy_tasks.select { |ct| existing_names.include?(ct.file_name) }.each do |ct|
-      ct.destination = "#{ct.media_item.sha256]}#{File.extname(ct.source)}"
+    existing_names_regex = Regexp.new(existing_names.map { |x| "(^#{x}$)" }.join('|'), i)
+    copy_tasks.each do |ct|
+      while existing_names_regex.match(File.basename(ct.destination))
+        ct.destination = "#{File.dirname(ct.destination)}/#{Digest::SHA256.hexdigest(Time.now.to_s)}#{File.extname(ct.source)}"
+      end
     end
-    puts "Copying #{copy_tasks.count}/#{requested.library.count} items..."
+    puts "Copying #{copy_tasks.count} items..."
     get_approval
     copy_tasks.each(&:copy!)
   end
@@ -128,8 +131,9 @@ class PictureMover
   private
 
   def method_missing(m, *args, &block)
-    puts "\nERROR: Unknown copy process name: #{m.to_s.gsub(/[^\d]/, '')}"
+    puts "\nERROR: Unknown copy process name: #{m.to_s.gsub(/execute_/, '')}"
     puts
+    sleep 1
     puts menu_text
   end
 

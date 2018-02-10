@@ -6,9 +6,9 @@ class MediaFolder
   
   MEDIA_TYPES = [:jpg, :jpeg, :png, :gif, :mov, :mp4, :aae]
   
-  def initialize(dir, reject_filetypes = [])
+  def initialize(dir, options = {})
     @path = dir
-    @reject_filetypes = reject_filetypes
+    @reject_filetypes = options[:omit_filetypes] || []
     @directory_contents = []
     @library = []
     FileUtils.mkdir_p(@path)
@@ -24,9 +24,9 @@ class MediaFolder
   
   def load_media
     files = Dir["#{path}/**/*.*"]
-    reg = Regexp.new(MEDIA_TYPES.reject { |m| reject_filetypes.include?(m) }.map { |m| "(.#{m}$)" }.join("|"), 'i') # todo: test the reject.
+    reg = Regexp.new(MEDIA_TYPES.reject { |m| reject_filetypes.include?(m.to_s) }.map { |m| "(.#{m}$)" }.join("|"), 'i')
     @directory_contents = files.select { |f| f.match(reg) }
-    puts "Found #{files.count} items. #{@directory_contents.count} remain post-filter."
+    puts "#{path}: Rejected #{files.count - @directory_contents.count} items."
     return @directory_contents
   end
 
@@ -42,8 +42,14 @@ class MediaFolder
   end
 
   def filter_duplicates
-    duplicates = library.group_by(&:sha256).select { |a, b| b.count > 0 }
-    duplicates.each { |d| library.delete(d) }
+    duplicates = library.group_by(&:sha256).select { |a, b| b.count > 1 }
+    counter = 0
+    duplicates.each do |sha256, media_items| 
+      media_items.shift
+      media_items.each { |mi| library.delete(mi) }
+      counter += media_items.count
+    end
+    puts "#{path}: Filtered #{duplicates.count} duplicate items."
   end
   
   def rename_conflicting_files

@@ -20,9 +20,9 @@ module OptionsParser
       options.copy_method = m.captures.first.strip
       options.source = File.absolute_path(s.captures.first)
       options.destination = File.absolute_path(d.captures.first)
-      options.omit_filetypes = f ? f.captures.first.split(";") : []
+      options.omit_filetypes = f ? f.captures.first.split(/,\s*/) : []
       options.minimum_size = b ? b.captures.first : 0
-      options.preserve_files = p ? true : false
+      options.preserve_files = p || p.nil? ? true : false
       options.test_run = t ? true : false
       options.verbose = v ? true : false
     else
@@ -42,7 +42,7 @@ module OptionsParser
          2. uses threading and better logic to perform a faster copy process. better for single use.
     -s : source directory *
     -d : destination directory *
-    -f : omit-filetypes, semicolon delimited
+    -f : omit-filetypes, comma delimited
     -b : omit files by size (in bytes)
     -t : test run - don't actually copy any files
     -v : verbose - say all the things
