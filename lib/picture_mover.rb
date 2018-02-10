@@ -107,20 +107,23 @@ class PictureMover
       requested.rename_conflicting_files
     }
     [a, b].map(&:join) # wait for the threaded processes to finish.
-    items = requested.library.dup
-    items.reject! { |x| existing.sha_dictionary.include?(x.sha256) }
-    copy_tasks = items.map do |x|
+    media_items = requested.library.dup
+    media_items.reject! { |x| existing.sha_dictionary.include?(x.sha256) }
+    copy_tasks = media_items.map do |item|
       CopyTask.new({
-        media_item: x,
-        destination: "#{options.destination}/#{File.basename(x.file_path)}",
+        media_item: item,
+        destination: "#{options.destination}/#{File.basename(item.file_path)}",
         copy_options: copy_options
       })
     end
     existing_names = existing.library.map { |x| File.basename(x.file_path) }
     existing_names_regex = Regexp.new(existing_names.map { |x| "(^#{x}$)" }.join('|'), i)
-    copy_tasks.each do |ct|
-      while existing_names_regex.match(File.basename(ct.destination))
-        ct.destination = "#{File.dirname(ct.destination)}/#{Digest::SHA256.hexdigest(Time.now.to_s)}#{File.extname(ct.source)}"
+    copy_tasks.each do |task|
+      while existing_names_regex.match(File.basename(task.destination))
+        task.destination = "#{File.dirname(task.destination)}"\
+                           "/#{File.basename(task.source)}"\
+                           "-#{Digest::SHA256.hexdigest(Time.now.to_s)}"\
+                           "#{File.extname(task.source)}"
       end
     end
     puts "Copying #{copy_tasks.count} items..."
